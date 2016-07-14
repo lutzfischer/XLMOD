@@ -18,6 +18,7 @@ package org.rappsilber.xlmod;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Objects;
 
 /**
  * Represents a single modification/cross-linker from the XLMOD
@@ -30,7 +31,7 @@ public class XLModEntry {
     protected double monoMass;
     protected String specificityString;
     protected int reactionsites;
-    protected ArrayList<HashSet<Specificity>>  specificities;
+    protected ArrayList<HashSet<XLModSpecificity>>  specificities;
 
     public static final XLModEntry NO_ENTRY = new XLModEntry();
 
@@ -44,7 +45,7 @@ public class XLModEntry {
         this.monoMass = MonoMass;
         this.specificityString = Specificity.trim();
         this.reactionsites = reactionsites;
-        this.specificities = new ArrayList<HashSet<Specificity>>(reactionsites); 
+        this.specificities = new ArrayList<HashSet<XLModSpecificity>>(reactionsites); 
         
         // split the specificties int sites
         String[] sites = specificityString.split("&");
@@ -56,15 +57,60 @@ public class XLModEntry {
             sites[s]=sites[s].trim();
             sites[s]=sites[s].substring(1,sites[s].length()-1);
             String[] sitespecifies =  sites[s].split(",");
-            HashSet<Specificity> hs = new HashSet<Specificity>(sitespecifies.length);
+            HashSet<XLModSpecificity> hs = new HashSet<XLModSpecificity>(sitespecifies.length);
             for (String entry : sitespecifies) {
-                hs.add(new Specificity(entry));
+                hs.add(new XLModSpecificity(entry));
             }
             specificities.add(hs);
         }
         
     
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj== null || !(obj instanceof XLModEntry))
+            return false;
+        if (obj == this )
+            return true;
+        XLModEntry xo = (XLModEntry) obj;
+        if (!(xo.id.contentEquals(id) && xo.monoMass == monoMass && xo.name.contentEquals(name) && specificities.size() == xo.specificities.size())) 
+            return false;
+
+        HashSet<Integer> mapedSites = new HashSet<>();
+        for (HashSet<XLModSpecificity> siteSpec: specificities) {
+            boolean fits = false;
+            int s = 0;
+            for (HashSet<XLModSpecificity> xositeSpec: xo.specificities) {
+                s++;
+                if (siteSpec.size() == xositeSpec.size() && siteSpec.containsAll(xositeSpec) && !mapedSites.contains(s)) {
+                    fits =true;
+                    break;
+                }
+            }
+            if (!fits)
+                return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 5;
+        hash = 61 * hash + Objects.hashCode(this.id);
+        hash = 61 * hash + Objects.hashCode(this.name);
+        hash = 61 * hash + (int) (Double.doubleToLongBits(this.monoMass) ^ (Double.doubleToLongBits(this.monoMass) >>> 32));
+        int sh =0;
+        for (HashSet<XLModSpecificity> spes: specificities) {
+            for (XLModSpecificity s : spes) {
+                sh+=s.hashCode();
+            }
+        }
+        hash = 61 * hash + sh;
+        return hash;
+    }
+    
+    
 
     /**
      * @return the id
@@ -146,14 +192,14 @@ public class XLModEntry {
     /**
      * @return the specificities
      */
-    public ArrayList<HashSet<Specificity>> getSpecificities() {
+    public ArrayList<HashSet<XLModSpecificity>> getSpecificities() {
         return specificities;
     }
 
     /**
      * @param specificities the specificities to set
      */
-    public void setSpecificities(ArrayList<HashSet<Specificity>> specificities) {
+    public void setSpecificities(ArrayList<HashSet<XLModSpecificity>> specificities) {
         this.specificities = specificities;
     }
     

@@ -16,10 +16,13 @@
 package org.rappsilber.xlmod;
 
 /**
- *
+ * This class represents modification specificity.
+ * Each reaction-site can have a list of alternative specificities.
+ * E.g. For BS3 each site can link Lysin, Serin, Threonine, Tyrosine or the protein n-terminal
+ * Each of these specificities is represented by one instance of this class for each site.
  * @author lfischer
  */
-public class Specificity {
+public class XLModSpecificity {
     public static String PROTEIN_C_TERMINAL_STRING = "Protein C-Term";
     public static String PROTEIN_N_TERMINAL_STRING = "Protein N-Term";
     public static String PEPTIDE_C_TERMINAL_STRING = "C-Term";
@@ -34,10 +37,10 @@ public class Specificity {
     public boolean terminalRestricted = false;
     public boolean isNonSpecific = false;
 
-    public Specificity() {
+    public XLModSpecificity() {
     }
 
-    public Specificity(String AminoAcid, boolean ProteinNterminal, boolean ProteinCterminal, boolean PeptideNterminal, boolean PeptideCterminal) {
+    public XLModSpecificity(String AminoAcid, boolean ProteinNterminal, boolean ProteinCterminal, boolean PeptideNterminal, boolean PeptideCterminal) {
         this.AminoAcid = AminoAcid;
         this.ProteinNterminal = ProteinNterminal;
         this.ProteinCterminal = ProteinCterminal;
@@ -47,7 +50,7 @@ public class Specificity {
         isNonSpecific = AminoAcid.contentEquals(NON_SPECIFIC);
     }
 
-    public Specificity(String config) {
+    public XLModSpecificity(String config) {
         config=config.trim();
         
         //do we have some terminal specificity
@@ -73,5 +76,28 @@ public class Specificity {
         } else {
             AminoAcid = config;
         }
-    }    
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null || !(obj  instanceof XLModSpecificity) || ((XLModSpecificity)obj).terminalRestricted != terminalRestricted)
+            return false;
+        XLModSpecificity so = (XLModSpecificity) obj;
+        if (terminalRestricted) {
+            if (so.PeptideCterminal != PeptideCterminal || so.PeptideNterminal != PeptideNterminal 
+                    || so.ProteinCterminal != ProteinCterminal || so.ProteinNterminal != ProteinNterminal)
+                return false;
+        }
+        
+        return so.AminoAcid.trim().contentEquals(AminoAcid.trim());
+    }
+
+    @Override
+    public int hashCode() {
+        return AminoAcid.hashCode() + (terminalRestricted? Boolean.TRUE.hashCode() : Boolean.FALSE.hashCode());
+    }
+    
+    
+    
+    
 }
