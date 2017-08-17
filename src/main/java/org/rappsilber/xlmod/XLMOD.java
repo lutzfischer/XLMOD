@@ -46,6 +46,7 @@ import org.rappsilber.data.csv.CSVRandomAccess;
 public class XLMOD implements Iterable<XLModEntry>   {
 //    public static String XLMOD_URL = "https://raw.githubusercontent.com/HUPO-PSI/mzIdentML/master/cv/XLMOD-1.0.0.csv";
     public static String XLMOD_URL = "https://raw.githubusercontent.com/HUPO-PSI/mzIdentML/master/cv/XLMOD.obo";
+    public static String XLMOD_LOCAL = "resource:///XLMOD.obo";
     
     TreeMap<Long,ArrayList<XLModEntry>> massToMod = new TreeMap<Long, ArrayList<XLModEntry>>();
     HashMap<String,XLModEntry> idToMod = new HashMap<String,XLModEntry>();
@@ -61,14 +62,32 @@ public class XLMOD implements Iterable<XLModEntry>   {
     
     
     /**
-     * reads in the obo-file from it's default location
+     * reads in the bundled XLMOD.obo
      * @throws IOException
      * @throws ParseException 
      */
     public void read() throws IOException, ParseException {
-        read(XLMOD_URL) ;
+        read(true);
     }
 
+    /**
+     * reads in the obo-file from it's default location
+     * @throws IOException
+     * @throws ParseException 
+     */
+    public void read(boolean local) throws IOException, ParseException {
+        if (!local) {
+            try {
+                read(XLMOD_URL) ;
+            } catch ( Exception e ) {
+                Logger.getLogger(this.getClass().getName()).log(Level.WARNING,"failed to load remod obo-file - falling back to embeded one",e);
+                read(XLMOD_LOCAL) ;
+            }
+        } else {
+            read(XLMOD_LOCAL) ;
+        }
+    }
+    
     /**
      * reads in XLMOD in either the csv or the obo-format.
      * It can either read from a file or from an url.
@@ -135,10 +154,12 @@ public class XLMOD implements Iterable<XLModEntry>   {
         
 
         OBOFormatParser obop = new OBOFormatParser();
-//        obop.
-        obop.setReader(in);
+//        obop.setReader(in);
         if (moduri.getScheme().equals("file")) {
             in = new BufferedReader(new FileReader(new File(moduri)));
+        } else if (moduri.getScheme().equals("resource")) {
+            InputStream resin = getClass().getResourceAsStream(moduri.getPath());
+            in = new BufferedReader(new  InputStreamReader(resin));
         } else {
             URL url = new URL(moduri.toString());
             URLConnection connection = url.openConnection();
