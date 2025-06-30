@@ -77,7 +77,7 @@ public class XLModEntry {
         if (obj == this )
             return true;
         XLModEntry xo = (XLModEntry) obj;
-        if (!(xo.id.contentEquals(id) && Math.abs(xo.monoMass - monoMass)<0.00001 && xo.name.contentEquals(name) && specificities.size() == xo.specificities.size())) 
+        if (!(xo.id.contentEquals(id) && ((xo.monoMass == null && monoMass == null) ||(xo.monoMass != null && monoMass != null && Math.abs(xo.monoMass - monoMass)<0.00001)) && xo.name.contentEquals(name) && specificities.size() == xo.specificities.size())) 
             return false;
 
         HashSet<Integer> mapedSites = new HashSet<>();
