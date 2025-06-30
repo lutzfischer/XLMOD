@@ -28,19 +28,25 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.obolibrary.oboformat.model.Clause;
+import org.obolibrary.oboformat.model.Frame;
 import org.obolibrary.oboformat.model.OBODoc;
+import org.obolibrary.oboformat.model.Xref;
 import org.obolibrary.oboformat.parser.OBOFormatConstants.OboFormatTag;
 import org.obolibrary.oboformat.parser.OBOFormatParser;
 import org.rappsilber.data.csv.CSVRandomAccess;
+import org.rappsilber.utils.RArrayUtils;
 
 /**
- * XLModList
+ * XLMOD parsing and guessing of modifications.
+ * 
+ * #TODO XLMOD also contains DNA/RNA crosslinker - currently parsed as reacting to anything
  * @author lfischer
  */
 public class XLMOD implements Iterable<XLModEntry>   {
@@ -49,6 +55,8 @@ public class XLMOD implements Iterable<XLModEntry>   {
     public static String XLMOD_LOCAL = "resource:///XLMOD.obo";
     
     TreeMap<Long,ArrayList<XLModEntry>> massToMod = new TreeMap<Long, ArrayList<XLModEntry>>();
+    ArrayList<XLModEntry> nullMassMods = new ArrayList<>();
+    HashMap<String,XLModEntry> nameToMod = new HashMap<String, XLModEntry>();
     HashMap<String,XLModEntry> idToMod = new HashMap<String,XLModEntry>();
     HashMap<Integer,ArrayList<XLModEntry>> byReactionSites = new HashMap<Integer, ArrayList<XLModEntry>>();
     
@@ -130,9 +138,115 @@ public class XLMOD implements Iterable<XLModEntry>   {
             String specificity = XLMOD_csv.getValue("specificities");
             int sites = (int)XLMOD_csv.getInteger("reactionSites");
             if (!id.isEmpty()) {
-                add(new XLModEntry(id, name, mass, specificity, sites));
+                add(new XLModEntry(id, name, mass, specificity, sites, null));
             }
         }
+        
+    }
+    
+    XLModEntry getEntryFromFrame(Frame f, OBODoc d, Double defaultMass) throws ParseException {
+        String id = f.getId();
+        String name = f.getTagValue("name",String.class);
+
+        List<Clause> l = f.getClauses(OboFormatTag.TAG_PROPERTY_VALUE);
+        Double mass = defaultMass;
+        String specificity = "";
+        Integer sites = null; // asume modification
+        for (Clause c : l) {
+            String data = c.getValue(String.class);
+            if (data.toLowerCase().contentEquals("monoisotopicmass:")) {
+                mass = Double.valueOf(c.getValue2(String.class));
+            } else if (data.toLowerCase().contentEquals("specificities:")) {
+                specificity = c.getValue2(String.class);
+            } else if (data.toLowerCase().contentEquals("reactionsites:")) {
+                sites = Integer.valueOf(c.getValue2(String.class));
+            }
+        }
+        ArrayList<String> synonyms = new ArrayList<>();
+        List<Clause> sl = f.getClauses(OboFormatTag.TAG_SYNONYM);
+        for (Clause c : sl) {
+            synonyms.add(c.getValue(String.class));
+        }
+        
+        //if (mass == null)
+        //    return null;
+        StringBuffer sbSpecificity = new StringBuffer();
+        int reactiveGroupsParsed = 0;
+        ArrayList<String>  reactive_group_ids = new ArrayList<>();
+        int parseReactiveGroups = 1;
+        for (Clause c : f.getClauses(OboFormatTag.TAG_IS_A)) {
+            if (c.getValue(String.class).contentEquals("XLMOD:00006"))
+                parseReactiveGroups = 2;
+        }
+        RELATIONSHIP: for (Clause c : f.getClauses(OboFormatTag.TAG_RELATIONSHIP)) {
+            //if (name.contentEquals("SDA"))  {
+            if (c.getValue().toString().contentEquals("has_reactive_group") && specificity.length()==0) {
+                reactiveGroupsParsed ++;
+                sbSpecificity.append("&(");
+                // find the reactive group and parse
+                String group = c.getValue2().toString();
+                Frame rgf = d.getTermFrame(group);
+                for (Clause rc : rgf.getClauses(OboFormatTag.TAG_RELATIONSHIP)) {
+                    if (rc.getValue(String.class).contentEquals("is_reactive_with") &&  rc.getValue2(String.class).contentEquals("XLMOD:00037")) {
+                        sbSpecificity.append("ANY)");
+                        continue RELATIONSHIP;
+                    }
+                }
+                List<Clause> rgfcl = rgf.getClauses(OboFormatTag.TAG_PROPERTY_VALUE);
+                // is it unspecific?
+                StringBuffer sbThisSpecificity = new StringBuffer();
+                for (Clause s : rgfcl) {
+                    String data = s.getValue(String.class);
+                    if (data.toLowerCase().contentEquals("specificities:")) {
+                        String v = s.getValue2(String.class);
+                        sbThisSpecificity.append(",").append(v.substring(1,v.length()-1));
+                    } else if (data.toLowerCase().contentEquals("secondaryspecificities:")) {
+                        String v = s.getValue2(String.class);
+                        sbThisSpecificity.append(",").append(v.substring(1,v.length()-1));
+                    }
+                }
+                if (sbThisSpecificity.length() == 0) {
+                    // there are some odd crosslinker defintions that I just can't cover here - sorry
+                    sbSpecificity.append("Any)");
+                } else {
+                    sbSpecificity.append(sbThisSpecificity.substring(1)).append(")");
+                }
+            } else if (c.getValue().toString().contentEquals("is_side_product_of")) {
+                // seems this is a partially quenched or not reacted crosslinker mod
+                XLModEntry be = getEntryFromFrame(d.getTermFrame(c.getValue2(String.class)), d, 0d);
+                
+                sites = 1;
+                HashSet<String> speSet= new HashSet<>(RArrayUtils.toCollection(be.specificityString.replace(")&(", ",").replace("(","").replace(")","").split(",")));
+                specificity = "(" + RArrayUtils.toString(speSet, ",") + ")";
+            }
+            if (parseReactiveGroups == reactiveGroupsParsed) {
+                break;
+            }
+
+        }
+        if (sites == null && mass == null) {
+            return null;
+        }
+        if (reactiveGroupsParsed >=1) {
+            if (reactiveGroupsParsed < sites && !sbSpecificity.substring(1).contains("&")) {
+                sbSpecificity.append(sbSpecificity);
+            }
+            specificity = sbSpecificity.substring(1, sbSpecificity.length());
+        }
+        sites = (sites == null? 1 : (sites>1?2:1));
+        if (specificity.length() == 0) {
+            for (int i = 0; i < sites; i++) {
+                specificity += "&(ANY)";
+            }
+            specificity = specificity.substring(1);
+        }
+        try {
+            return new XLModEntry(id, name, mass, specificity, sites , reactive_group_ids);
+        } catch (Exception e) {
+            return null;
+        }
+
+        //return new XLModEntry(id, name, mass, specificity, sites>1?2:1 , reactive_group_ids);
         
     }
     
@@ -172,38 +286,10 @@ public class XLMOD implements Iterable<XLModEntry>   {
         Collection<org.obolibrary.oboformat.model.Frame> frames = obo.getTermFrames();
         
         for (org.obolibrary.oboformat.model.Frame f : frames) {
-            String id = f.getId();
-            String name = f.getTagValue("name",String.class);
-            
-            List<Clause> l = f.getClauses(OboFormatTag.TAG_PROPERTY_VALUE);
-            Double mass = null;
-            String specificity = null;
-            Integer sites = null;
-            for (Clause c : l) {
-                String data = c.getValue(String.class);
-                if (data.contentEquals("monoisotopicMass:")) {
-                    mass = Double.valueOf(c.getValue2(String.class));
-                } else if (data.contentEquals("specificities:")) {
-                    specificity = c.getValue2(String.class);
-                } else if (data.contentEquals("reactionSites:")) {
-                    sites = Integer.valueOf(c.getValue2(String.class));
-                }
+            XLModEntry e = getEntryFromFrame(f, obo, null);
+            if (e != null) {
+                add(e);
             }
-            // skip everything that does not have a mass as a non-modification entry
-            if (mass == null) {
-                continue;
-            }
-
-            XLModEntry e =new XLModEntry(id, name, mass, specificity, sites);
-            add(e);
-            
-            // get synonymes
-            l = f.getClauses(OboFormatTag.TAG_SYNONYM);
-            for (Clause c : l) {
-                String syn = c.getValue(String.class);
-                e.getSynonyms().add(syn);
-            }
-            
         }
         
     }
@@ -216,7 +302,7 @@ public class XLMOD implements Iterable<XLModEntry>   {
     public boolean add(XLModEntry entry) {
         if (list.add(entry)) {
             idToMod.put(entry.id, entry);
-            long key= Math.round(entry.getMonoMass()*1000);
+            Long key= (entry.getMonoMass() ==null ? (Long)null: Long.valueOf(Math.round(entry.getMonoMass()*1000)));
             ArrayList<XLModEntry> re = byReactionSites.get(entry.reactionsites);
             if (re == null) {
                 re = new ArrayList<XLModEntry>();
@@ -224,17 +310,24 @@ public class XLMOD implements Iterable<XLModEntry>   {
             }
             re.add(entry);
             
-            
-            ArrayList<XLModEntry> prev = massToMod.get(key);
-            if (prev == null) {
-                prev = new ArrayList<XLModEntry>();
-                massToMod.put(key, prev);
-            }
-            if (prev.add(entry)) {
-                return true;
+            if (key == null) {
+                nullMassMods.add(entry);
             } else {
-                list.remove(entry);
-                return false;
+                ArrayList<XLModEntry> prev = massToMod.get(key);
+                if (prev == null) {
+                    prev = new ArrayList<XLModEntry>();
+                    massToMod.put(key, prev);
+                }
+                if (prev.add(entry)) {
+                    nameToMod.put(entry.name, entry);
+                    for (String s : entry.synonyms) {
+                        nameToMod.put(s, entry);
+                    }
+                    return true;
+                } else {
+                    list.remove(entry);
+                    return false;
+                }
             }
         }
         return false;
@@ -287,7 +380,7 @@ public class XLMOD implements Iterable<XLModEntry>   {
      * @param isPepCterm
      * @return the first xlmod-entry it find that fits the definition or null if none can be found
      */
-    public XLModEntry guessModification(double mass, String[] linkedResidues, boolean[] isProtNterm, boolean[] isProtCTerm, boolean[] isPepNterm, boolean[] isPepCterm) {
+    public XLModEntry guessModification(Double mass, String[] linkedResidues, boolean[] isProtNterm, boolean[] isProtCTerm, boolean[] isPepNterm, boolean[] isPepCterm) {
         if (linkedResidues.length >2) {
             throw new UnsupportedOperationException("Currently can only guess up to dimeric cross-linker");
         }
@@ -370,15 +463,23 @@ public class XLMOD implements Iterable<XLModEntry>   {
      * @param isPepCterm
      * @return a xlmod-entry that fits the definition or null if none can be found
      */
-    public XLModEntry guessModification(double mass, String name, String[] linkedResidues, boolean[] isProtNterm, boolean[] isProtCTerm, boolean[] isPepNterm, boolean[] isPepCterm) {
+    public XLModEntry guessModification(Double mass, String name, String[] linkedResidues, boolean[] isProtNterm, boolean[] isProtCTerm, boolean[] isPepNterm, boolean[] isPepCterm, boolean includeNullMass) {
         if (linkedResidues.length >2) {
             throw new UnsupportedOperationException("Currently can only guess up to dimeric cross-linker");
         }
-        long key=Math.round(mass*1000);
-        ArrayList<XLModEntry> massCandidates =  massToMod.get(key);
+        ArrayList<XLModEntry> massCandidates;
+        if (mass == null) {
+            massCandidates =  new ArrayList<>(nullMassMods);
+        } else {
+            long key=Math.round(mass*1000);
+            massCandidates =  massToMod.get(key);
+        }
         // do we have something with that mass?
         if (massCandidates == null) {
-            return null;
+            if (includeNullMass && name != null && name.length()>0) {
+                return guessModification(null, name, linkedResidues, isProtNterm, isProtCTerm, isPepNterm, isPepCterm, false);
+            } else
+                return null;
         }
         
         
@@ -463,6 +564,7 @@ public class XLMOD implements Iterable<XLModEntry>   {
                 }
             }
         }
+        
         return null;
     }
     
@@ -473,7 +575,7 @@ public class XLMOD implements Iterable<XLModEntry>   {
      */
     public XLModEntry guessModification(XLModQuery q) {
         if (q.name != null && !q.name.isEmpty())
-            return guessModification(q.mass, q.name, q.linkedResidues, q.isProtNterm, q.isProtCTerm, q.isPepNterm, q.isPepCterm);
+            return guessModification(q.mass, q.name, q.linkedResidues, q.isProtNterm, q.isProtCTerm, q.isPepNterm, q.isPepCterm, q.includeNullMass);
         return guessModification(q.mass, q.linkedResidues, q.isProtNterm, q.isProtCTerm, q.isPepNterm, q.isPepCterm);
     }
     
@@ -548,6 +650,17 @@ public class XLMOD implements Iterable<XLModEntry>   {
         this.usedURL = usedURL;
     }
     
-    
+    public static void main(String[] args) {
+        try {
+            XLMOD xlmod = new XLMOD();
+            //xlmod.read();
+            xlmod = new XLMOD();
+                        xlmod.read("https://raw.githubusercontent.com/HUPO-PSI/xlmod-CV/refs/heads/main/XLMOD.obo");
+        } catch (IOException ex) {
+            Logger.getLogger(XLMOD.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (ParseException ex) {
+            Logger.getLogger(XLMOD.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
     
 }
