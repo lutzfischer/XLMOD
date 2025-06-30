@@ -22,7 +22,7 @@ import java.util.Arrays;
  * @author lfischer
  */
 public class XLModQuery {
-    double mass;
+    Double mass;
     String[] linkedResidues;
     boolean[] isProtNterm;
     boolean[] isProtCTerm;
@@ -31,14 +31,16 @@ public class XLModQuery {
     String name = null;
     boolean isTerminal;
     int hashcode;
+    boolean includeNullMass;
 
-    public XLModQuery(double mass, String[] linkedResidues, boolean[] isProtNterm, boolean[] isProtCTerm, boolean[] isPepNterm, boolean[] isPepCterm) {
+    public XLModQuery(double mass, String[] linkedResidues, boolean[] isProtNterm, boolean[] isProtCTerm, boolean[] isPepNterm, boolean[] isPepCterm, boolean includeNullMass) {
         this.mass = mass;
         this.linkedResidues = linkedResidues;
         this.isProtNterm = isProtNterm;
         this.isProtCTerm = isProtCTerm;
         this.isPepNterm = isPepNterm;
         this.isPepCterm = isPepCterm;
+        this.includeNullMass = includeNullMass;
         hashcode = (int)mass;
         for (int i = 0 ; i<linkedResidues.length;i++) {
             hashcode += linkedResidues[i].hashCode();
@@ -46,9 +48,10 @@ public class XLModQuery {
             hashcode += Boolean.hashCode(term);
             isTerminal |= term;
         }
+        
     }
-    public XLModQuery(double mass, String name,String[] linkedResidues, boolean[] isProtNterm, boolean[] isProtCTerm, boolean[] isPepNterm, boolean[] isPepCterm) {
-        this(mass, linkedResidues, isProtNterm, isProtCTerm, isPepNterm, isPepCterm);
+    public XLModQuery(double mass, String name,String[] linkedResidues, boolean[] isProtNterm, boolean[] isProtCTerm, boolean[] isPepNterm, boolean[] isPepCterm, boolean includeNullMass) {
+        this(mass, linkedResidues, isProtNterm, isProtCTerm, isPepNterm, isPepCterm, includeNullMass);
         this.name = name;
     }
 

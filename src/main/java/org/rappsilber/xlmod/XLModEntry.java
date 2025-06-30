@@ -17,6 +17,7 @@ package org.rappsilber.xlmod;
 
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Objects;
 
@@ -28,10 +29,11 @@ public class XLModEntry {
     protected String id;
     protected String name;
     protected HashSet<String> synonyms = new HashSet<String>();
-    protected double monoMass;
+    protected Double monoMass;
     protected String specificityString;
     protected int reactionsites;
     protected ArrayList<HashSet<XLModSpecificity>>  specificities;
+    
 
     public static final XLModEntry NO_ENTRY = new XLModEntry();
 
@@ -39,13 +41,14 @@ public class XLModEntry {
         
     }
     
-    public XLModEntry(String ID, String Name, double MonoMass, String Specificity, int reactionsites) throws ParseException {
+    public XLModEntry(String ID, String Name, Double MonoMass, String Specificity, int reactionsites, Collection<String>  synonyms) throws ParseException {
         this.id = ID;
         this.name = Name;
         this.monoMass = MonoMass;
         this.specificityString = Specificity.trim();
         this.reactionsites = reactionsites;
         this.specificities = new ArrayList<HashSet<XLModSpecificity>>(reactionsites); 
+        this.synonyms.addAll(synonyms);
         
         // split the specificties int sites
         String[] sites = specificityString.split("&");
@@ -74,7 +77,7 @@ public class XLModEntry {
         if (obj == this )
             return true;
         XLModEntry xo = (XLModEntry) obj;
-        if (!(xo.id.contentEquals(id) && xo.monoMass == monoMass && xo.name.contentEquals(name) && specificities.size() == xo.specificities.size())) 
+        if (!(xo.id.contentEquals(id) && ((xo.monoMass == null && monoMass == null) ||(xo.monoMass != null && monoMass != null && Math.abs(xo.monoMass - monoMass)<0.00001)) && xo.name.contentEquals(name) && specificities.size() == xo.specificities.size())) 
             return false;
 
         HashSet<Integer> mapedSites = new HashSet<>();
@@ -150,7 +153,7 @@ public class XLModEntry {
     /**
      * @return the monoMass
      */
-    public double getMonoMass() {
+    public Double getMonoMass() {
         return monoMass;
     }
 

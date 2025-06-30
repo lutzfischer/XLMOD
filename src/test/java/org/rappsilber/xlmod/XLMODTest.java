@@ -7,6 +7,7 @@ package org.rappsilber.xlmod;
 
 import java.io.IOException;
 import java.text.ParseException;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -26,7 +27,7 @@ public class XLMODTest {
     
     public XLMODTest() {
         try {
-            this.expResult = new XLModEntry("XLMOD:01000", "hydrolyzed BS3", 156.07864431,"(K,S,T,Y,Protein N-term)" , 1);
+            this.expResult = new XLModEntry("XLMOD:01000", "hydrolyzed BS3", 156.07864431,"(K,S,T,Y,Protein N-term)" , 1, new HashSet<String>());
         } catch (ParseException ex) {
             Logger.getLogger(XLMODTest.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -193,7 +194,7 @@ public class XLMODTest {
     public void testGuessModification_XLModQuery() {
         System.out.println("guessModification");
         boolean[] term = new boolean[]{false};
-        XLModQuery q = new XLModQuery(156.07864431, "BS3", new String[]{"K"}, term, term, term, term);
+        XLModQuery q = new XLModQuery(156.07864431, "BS3", new String[]{"K"}, term, term, term, term, false);
         XLMOD instance = new XLMOD();
         try {
             instance.read();
@@ -205,7 +206,7 @@ public class XLMODTest {
         XLModEntry result = instance.guessModification(q);
         assertEquals(expResult, result);
         
-        q = new XLModQuery(156.07864431, new String[]{"K"}, term, term, term, term);
+        q = new XLModQuery(156.07864431, new String[]{"K"}, term, term, term, term, false);
         result = instance.guessModification(q);
         assertEquals(expResult, result);
         
@@ -218,7 +219,7 @@ public class XLMODTest {
     public void testGuessModificationCached() {
         System.out.println("guessModificationCached");
         boolean[] term = new boolean[]{false};
-        XLModQuery q = new XLModQuery(156.07864431, "BS3", new String[]{"K"}, term, term, term, term);
+        XLModQuery q = new XLModQuery(156.07864431, "BS3", new String[]{"K"}, term, term, term, term, false);
         XLMOD instance = new XLMOD();
         try {
             instance.read();
