@@ -144,6 +144,17 @@ public class XLMOD implements Iterable<XLModEntry>   {
         
     }
     
+    /**
+     * Parses an OBO term Frame and constructs an XLModEntry object from its contents.
+     * Extracts information such as ID, name, mass, specificity, reaction sites, synonyms, and reactive groups,
+     * handling special cases like side products and reactive group relationships.
+     *
+     * @param f           The OBO term Frame representing a crosslinker or modification  entry.
+     * @param d           The OBODoc containing the full OBO document, used for resolving references.
+     * @param defaultMass The default mass to use if the Frame does not specify one.
+     * @return An XLModEntry constructed from the Frame if the term reverse to a crosslinker or a crosslinekr modification and the needed information are present, otherwise null.
+     * @throws ParseException if there is an error parsing values from the Frame.
+     */
     XLModEntry getEntryFromFrame(Frame f, OBODoc d, Double defaultMass) throws ParseException {
         String id = f.getId();
         String name = f.getTagValue("name",String.class);
